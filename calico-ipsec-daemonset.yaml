@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: calico-ipsec-node
+  namespace: kube-system
+  labels:
+    k8s-app: calico-ipsec
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-ipsec
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-ipsec
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+    spec:
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
+      - operator: Exists
+        key: CriticalAddonsOnly
+      imagePullSecrets:
+      - name: gitlab-registry-infraimages
+      hostNetwork: true
+      dnsPolicy: Default  # Don't use cluster DNS.
+      automountServiceAccountToken: false
+      volumes:
+      - name: ipsec-conf
+        emptyDir: {}
+      containers:
+      - name: ipsec
+        image: calico-ipsec:latest
+        volumeMounts:
+        - name: ipsec-conf
+          mountPath: /etc/calico-ipsec-conf
+        command:
+        - /sbin/tini
+        args:
+        - "--"
+        - "ipsec"
+        - "start"
+        - "--nofork"
+        - "--auto-update"
+        - "15"
+        ports:
+        - containerPort: 500
+          name: isakmp
+          protocol: UDP
+        resources:
+          requests:
+            cpu: 150m
+            memory: 20Mi
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN"]
+      - name: build-ipsec-conf
+        image: calico-ipsec:latest
+        volumeMounts:
+        - name: ipsec-conf
+          mountPath: /etc/calico-ipsec-conf
+        env:
+        - name: IPSEC_CONF_DIR
+          value: "/etc/calico-ipsec-conf"
+        - name: IPSEC_AUTHBY
+          value: ""
+        command:
+        - /sbin/tini
+        args:
+        - "--"
+        - "/bin/bash"
+        - "-eu"
+        - "-o"
+        - "pipefail"
+        - "-c"
+        - "cd $IPSEC_CONF_DIR && while :; do build-ipsec-conf.sh > ipsec.conf.tmp && mv ipsec.conf.tmp ipsec.conf; sleep 15; done"
+        resources:
+          requests:
+            cpu: 150m
+            memory: 20Mi

@@ -1,10 +1,5 @@
-#!/bin/bash
+#!/bin/sh
 set -eu
-set -o pipefail
-
-get_bird_routes() {
-    ip -oneline route show | grep -F 'proto bird'
-}
 
 get_left_ip() {
     local dev="$(
@@ -20,24 +15,12 @@ get_left_ip() {
     echo "$ip"
 }
 
-get_left_subnet() {
-    declare -n routes="${1:?no routes variable passed}"
-    awk '
-        /^blackhole / { print $2; exit; }
-    ' <<< "$routes"
-}
+# IPIP protocol number is 4; 94 is old/unused
+PROTOPORT="${IPSEC_PROTOPORT:-[4/]}"
 
-get_right_ip_and_subnet() {
-    declare -n routes="${1:?no routes variable passed}"
-    awk '
-        / via / { print $3 " " $1; }
-    ' <<< "$routes"
-}
-
-BIRD_ROUTES="$(get_bird_routes)"
 LEFT_IP="$(get_left_ip)"
 LEFT_NAME="to"
-LEFT_SUBNET="$(get_left_subnet BIRD_ROUTES)"
+LEFT_SUBNET="${LEFT_IP}/32"
 
 cat <<HEADER
 # /etc/ipsec.conf - strongSwan IPsec configuration file
@@ -50,15 +33,15 @@ conn %default
 
 HEADER
 
-get_right_ip_and_subnet BIRD_ROUTES | \
-    while read RIGHT_IP RIGHT_SUBNET; do
-        RIGHT_NAME="$(sed 's/\./_/g' <<< "$RIGHT_IP")"
-        cat <<CONN
+ip -oneline route show | awk '/ via .* proto bird / { print $3; }' | while read RIGHT_IP; do
+    RIGHT_NAME="$(echo "$RIGHT_IP" | sed 's/\./_/g')"
+    RIGHT_SUBNET="${RIGHT_IP}/32"
+    cat <<CONN
 conn ${LEFT_NAME}_${RIGHT_NAME}
     left=${LEFT_IP}
-    leftsubnet=${LEFT_SUBNET}
+    leftsubnet=${LEFT_SUBNET}${PROTOPORT}
     right=${RIGHT_IP}
-    rightsubnet=${RIGHT_SUBNET}
+    rightsubnet=${RIGHT_SUBNET}${PROTOPORT}
 
 CONN
-    done
+done

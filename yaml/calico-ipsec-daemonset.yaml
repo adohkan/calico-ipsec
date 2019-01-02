@@ -4,17 +4,17 @@ metadata:
   name: calico-ipsec-node
   namespace: kube-system
   labels:
-    k8s-app: calico-ipsec
+    k8s-app: calico-ipsec-node
 spec:
   selector:
     matchLabels:
-      k8s-app: calico-ipsec
+      k8s-app: calico-ipsec-node
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        k8s-app: calico-ipsec
+        k8s-app: calico-ipsec-node
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
@@ -25,20 +25,24 @@ spec:
         effect: NoExecute
       - operator: Exists
         key: CriticalAddonsOnly
-      imagePullSecrets:
-      - name: gitlab-registry-infraimages
       hostNetwork: true
       dnsPolicy: Default  # Don't use cluster DNS.
       automountServiceAccountToken: false
       volumes:
       - name: ipsec-conf
         emptyDir: {}
+      - name: ipsec-secrets
+        secret:
+          secretName: calico-ipsec
       containers:
       - name: ipsec
-        image: calico-ipsec:latest
+        image: adohkan/calico-ipsec
         volumeMounts:
         - name: ipsec-conf
           mountPath: /etc/calico-ipsec-conf
+        - name: ipsec-secrets
+          mountPath: /etc/calico-ipsec-secrets
+          readOnly: true
         command:
         - /sbin/tini
         args:
@@ -60,23 +64,24 @@ spec:
           capabilities:
             add: ["NET_ADMIN"]
       - name: build-ipsec-conf
-        image: calico-ipsec:latest
+        image: adohkan/calico-ipsec
         volumeMounts:
         - name: ipsec-conf
           mountPath: /etc/calico-ipsec-conf
         env:
         - name: IPSEC_CONF_DIR
           value: "/etc/calico-ipsec-conf"
-        - name: IPSEC_AUTHBY
-          value: ""
+        #- name: IPSEC_AUTHBY
+        #  value: ""
+        #- name: IPSEC_PROTOPORT
+        # uncomment for VXLAN
+        #  value: "[udp/8472]"
         command:
         - /sbin/tini
         args:
         - "--"
-        - "/bin/bash"
+        - "/bin/sh"
         - "-eu"
-        - "-o"
-        - "pipefail"
         - "-c"
         - "cd $IPSEC_CONF_DIR && while :; do build-ipsec-conf.sh > ipsec.conf.tmp && mv ipsec.conf.tmp ipsec.conf; sleep 15; done"
         resources:

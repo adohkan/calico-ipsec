@@ -76,6 +76,8 @@ spec:
         #- name: IPSEC_PROTOPORT
         # uncomment for VXLAN
         #  value: "[udp/8472]"
+        #- name: IPSEC_AUTO_PARAM
+        #  value: "add"
         command:
         - /sbin/tini
         args:

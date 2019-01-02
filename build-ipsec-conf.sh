@@ -29,7 +29,7 @@ config setup
 
 conn %default
     authby=${IPSEC_AUTHBY:-pubkey}
-    auto=route
+    auto=${IPSEC_AUTO_PARAM:-route}
 
 HEADER
 

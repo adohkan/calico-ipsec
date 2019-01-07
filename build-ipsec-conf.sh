@@ -33,7 +33,7 @@ conn %default
 
 HEADER
 
-ip -oneline route show | awk '/ via .* proto bird / { print $3; }' | while read RIGHT_IP; do
+ip -oneline route show | awk '/ via .* proto bird / { print $3; }' | sort -u | while read RIGHT_IP; do
     RIGHT_NAME="$(echo "$RIGHT_IP" | sed 's/\./_/g')"
     RIGHT_SUBNET="${RIGHT_IP}/32"
     cat <<CONN
